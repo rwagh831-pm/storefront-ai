@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Storefront AI: a creator's store in 2 minutes
 
-## Getting Started
+A prototype for **SuperProfile** that turns an Instagram handle or a one-line description into a ready-to-share storefront: an AI-written bio, 2–4 product ideas with India-appropriate INR pricing ("why ₹499?"), descriptions, and a public mobile page.
 
-First, run the development server:
+- **Live:** https://storefront-ai-eight.vercel.app
+- **Decision doc:** [docs/DECISION_DOC.md](docs/DECISION_DOC.md)
+
+## Try it (on a phone)
+
+1. Tap a **sample creator** (e.g. `@fitwithriya`), or switch to **Describe myself**.
+2. Check **"Here's what we understood"**, then tap **Build my store**.
+3. Edit any field, tap **↻** on one section or **Regenerate all**, switch language (English / Hinglish / Hindi), pick a style.
+4. **Publish**, then open the link, share it on WhatsApp, or copy the ready-made Instagram caption.
+
+**Edge cases you can try**
+
+| Input | What happens |
+|---|---|
+| `@anyrealhandle` | Not in the sample set → friendly fallback to description |
+| `@rohan.private` | Private account → fallback to description |
+| `asdkjh qwe zzz` | Gibberish → asks for a clearer line (no AI call spent) |
+| `fitness` | One word → 2 tap-questions before generating |
+| `@shredded.by.vikram` | Steroid / fat-burner content → those products are blocked; safe alternatives are generated |
+| `@paisa.with.arjun` | "Guaranteed returns" post → finance products stay education-only |
+| Type "guaranteed 100% returns" in a title, then Publish | Publish is blocked with a clear message |
+| `/s/does-not-exist` | Friendly "store doesn't exist" page |
+
+> Instagram data is **simulated** with 10 fictional sample profiles (`src/data/demo-profiles.json`). The AI still generates every store live: nothing is pre-generated.
+
+## Stack
+
+- **Next.js 16** (App Router, TypeScript, Tailwind CSS): one project for the screens and the server API
+- **Claude Haiku 5.5** via the Anthropic SDK with **structured outputs** (Zod schemas); fallback model: Claude Haiku 4.5
+- **Upstash Redis** (via Vercel) for published stores and view/click counts
+- Hosted on **Vercel**
+
+## Run locally
+
+```bash
+git clone https://github.com/rwagh831-pm/storefront-ai.git
+cd storefront-ai
+npm install
+```
+
+Create `.env.local` in the project root:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+# Optional locally (without them, published stores are kept in memory until restart):
+KV_REST_API_URL=...
+KV_REST_API_TOKEN=...
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project map
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | What it does |
+|---|---|
+| `src/components/Builder.tsx` | All creator screens: start → questions → "what we understood" → editor → published |
+| `src/components/StoreView.tsx` | The store page design (used for preview and the public page) |
+| `src/app/api/profile` | Understands the creator from a handle or a description |
+| `src/app/api/generate` | Generates the whole store, or regenerates one part |
+| `src/app/api/publish` | Final safety check, then saves the store |
+| `src/app/api/track`, `api/stats` | View and click counts |
+| `src/app/s/[slug]` | Public store page |
+| `src/lib/ai.ts` | Prompts, structured LLM calls, validation, model fallback, quality control |
+| `src/lib/pricing.ts` | INR price bands (format × audience size × niche) enforced in code |
+| `src/lib/guardrails.ts` | Input checks and the content safety policy |
 
-## Learn More
+## Built with
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Scaffolded with `create-next-app`. No UI kit. Built with **Claude Code** as the AI pair-programmer (see the decision doc for how).

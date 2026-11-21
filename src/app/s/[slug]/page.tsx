@@ -5,7 +5,7 @@ import { getStore } from "@/lib/db";
 import PublicStore from "./PublicStore";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
+  const slug = decodeURIComponent((await params).slug).toLowerCase();
   const rec = await getStore(slug).catch(() => null);
   if (!rec) return { title: "Store not found" };
   return {
@@ -26,7 +26,7 @@ export default function StorePage({ params }: { params: Promise<{ slug: string }
 }
 
 async function StoreContent({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+  const slug = decodeURIComponent((await params).slug).toLowerCase();
   const rec = await getStore(slug).catch(() => null);
   if (!rec) notFound();
   return <PublicStore slug={slug} handle={rec.handle} store={rec.store} />;

@@ -95,7 +95,7 @@ export type Store = StoreOutput & {
 };
 
 export const BioOutputSchema = z.object({ tagline: z.string(), bio: z.string() });
-export const SingleProductOutputSchema = z.object({ product: ProductSchema });
+export const SingleProductOutputSchema = z.object({ product: ProductSchema, shareCaption: z.string() });
 
 export const THEMES = ["sunset", "ocean", "forest", "plum"] as const;
 export type ThemeName = (typeof THEMES)[number];
@@ -103,9 +103,9 @@ export type ThemeName = (typeof THEMES)[number];
 // ---------- API request validation ----------
 export const ProfileRequestSchema = z.object({
   mode: z.enum(["handle", "description"]),
-  handle: z.string().optional(),
-  description: z.string().optional(),
-  answers: z.record(z.string(), z.string()).optional(),
+  handle: z.string().max(300).optional(),
+  description: z.string().max(20000).optional(), // friendly 1,000-char limit is enforced in checkDescription
+  answers: z.record(z.string().max(300), z.string().max(300)).optional(),
 });
 
 export const GenerateRequestSchema = z.object({
@@ -123,15 +123,15 @@ export const GenerateRequestSchema = z.object({
 
 export const PublishRequestSchema = z.object({
   store: z.object({
-    displayName: z.string().min(1).max(80),
-    tagline: z.string().max(160),
-    bio: z.string().min(1).max(600),
+    displayName: z.string().trim().min(1).max(80),
+    tagline: z.string().trim().max(160),
+    bio: z.string().trim().min(1).max(600),
     products: z
       .array(
         z.object({
-          title: z.string().min(1).max(100),
+          title: z.string().trim().min(1).max(100),
           format: z.enum(FORMATS),
-          description: z.string().min(1).max(700),
+          description: z.string().trim().min(1).max(700),
           whoItsFor: z.string().max(200),
           deliverables: z.array(z.string().max(120)).max(8),
           price: z.number().int().min(0).max(99999),

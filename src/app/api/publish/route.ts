@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { PublishRequestSchema } from "@/lib/schemas";
-import { getStore, logTimeToPublish, saveStore } from "@/lib/db";
+import { getRecentPublish, getStore, logTimeToPublish, saveStore, setRecentPublish } from "@/lib/db";
 import { scanText } from "@/lib/guardrails";
 import { fail, ok } from "../_lib";
 
@@ -21,7 +21,11 @@ export async function POST(req: Request) {
   const parsed = PublishRequestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     const first = parsed.error.issues[0];
-    return fail("invalid_store", `Please check your store: ${first?.path.join(" → ") || "a field"} looks empty or too long.`);
+    const path = first?.path ?? [];
+    const FIELD: Record<string, string> = { displayName: "your name", bio: "your bio", tagline: "your tagline", title: "the title", description: "the description", price: "the price", products: "your offers (keep 1–4)" };
+    const field = FIELD[String(path[path.length - 1])] ?? FIELD[String(path[1])] ?? "a field";
+    const offer = path[1] === "products" && typeof path[2] === "number" ? ` in offer ${path[2] + 1}` : "";
+    return fail("invalid_store", `Please check ${field}${offer} — it looks empty, too long, or not a whole number.`);
   }
   const { store, handle, slug: wantedSlug, editToken, startedAt } = parsed.data;
 
@@ -47,11 +51,16 @@ export async function POST(req: Request) {
     }
   }
 
-  // New store: pick a free slug
+  // New store. If the exact same store was published in the last 2 minutes (double-tap), return that one.
+  const fingerprint = createHash("sha256").update(JSON.stringify({ handle, store })).digest("hex");
+  const recent = await getRecentPublish(fingerprint);
+  if (recent) return ok({ ...recent, updated: false });
+
   let slug = slugify(handle ?? store.displayName);
   if (await getStore(slug)) slug = `${slug}-${randomBytes(2).toString("hex")}`;
   const token = randomBytes(16).toString("hex");
   await saveStore({ slug, handle, store, editToken: token, createdAt: now, updatedAt: now });
+  await setRecentPublish(fingerprint, { slug, editToken: token });
   if (startedAt && startedAt < now) await logTimeToPublish(now - startedAt).catch(() => {});
 
   return ok({ slug, editToken: token, updated: false });

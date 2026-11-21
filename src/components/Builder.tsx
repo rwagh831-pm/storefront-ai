@@ -226,10 +226,10 @@ export default function Builder({ samples }: { samples: Sample[] }) {
     setBusy(`p${index}`);
     setError(null);
     try {
-      const res = await api<{ product: Product }>("/api/generate", { profile, language, target: { type: "product", index }, store });
+      const res = await api<{ product: Product; shareCaption?: string }>("/api/generate", { profile, language, target: { type: "product", index }, store });
       const products = [...store.products];
       products[index] = res.product;
-      setStore({ ...store, products });
+      setStore({ ...store, products, shareCaption: res.shareCaption || store.shareCaption });
     } catch (e) {
       setError({ message: (e as Error).message, retry: () => regenProduct(index) });
     } finally {

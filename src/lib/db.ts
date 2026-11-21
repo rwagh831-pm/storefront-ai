@@ -57,3 +57,30 @@ export async function logTimeToPublish(ms: number): Promise<void> {
   if (redis) await redis.lpush("metrics:time_to_publish_ms", ms);
   else mem.set("metrics:last_ttp", ms);
 }
+
+/** Fixed-window rate limit. Returns true if this call is allowed. */
+export async function allow(key: string, limit: number, windowSec: number): Promise<boolean> {
+  const k = `rl:${key}`;
+  if (redis) {
+    const n = await redis.incr(k);
+    if (n === 1) await redis.expire(k, windowSec);
+    return n <= limit;
+  }
+  const now = Date.now();
+  const e = (mem.get(k) as { n: number; until: number }) ?? { n: 0, until: now + windowSec * 1000 };
+  if (now > e.until) Object.assign(e, { n: 0, until: now + windowSec * 1000 });
+  e.n += 1;
+  mem.set(k, e);
+  return e.n <= limit;
+}
+
+/** Remembers a recent publish so a double-tap returns the same store instead of creating a copy. */
+export async function getRecentPublish(fingerprint: string): Promise<{ slug: string; editToken: string } | null> {
+  if (redis) return (await redis.get<{ slug: string; editToken: string }>(`pub:${fingerprint}`)) ?? null;
+  return (mem.get(`pub:${fingerprint}`) as { slug: string; editToken: string }) ?? null;
+}
+
+export async function setRecentPublish(fingerprint: string, value: { slug: string; editToken: string }): Promise<void> {
+  if (redis) await redis.set(`pub:${fingerprint}`, value, { ex: 120 });
+  else mem.set(`pub:${fingerprint}`, value);
+}

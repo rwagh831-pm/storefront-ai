@@ -64,7 +64,7 @@ flowchart TD
 - **Real Instagram scraping:** ToS risk and blocked IPs. Production should use SuperProfile's **existing Instagram connection from Auto-DM**.
 - **Image or cover generation, custom domains, multiple themes per section:** these look nice but don't move "publish in the first session".
 - **Analytics dashboard:** only views/clicks on the share screen, plus a logged time-to-publish event.
-- **Rate limiting and abuse protection:** needed before a real launch (§9).
+- **Per-user limits on AI calls:** analytics are rate-limited, but AI generation is not yet (§9).
 
 ## 5. How the AI works
 
@@ -80,6 +80,8 @@ flowchart TD
 - **Price enforcement:** clamp to the band and round to ₹x99; if adjusted, the reason says so.
 - **Safety, 3 layers:** (1) rules scan the creator's own content and flag it to the model; (2) every generated product is scanned, then *blocked* items are replaced or removed, with a note shown to the creator; (3) **publish re-checks the final text**, because creators can type anything while editing.
 - Policy covers: steroids and diet pills, counterfeit ("first copy") goods, leaked papers, betting tips (blocked); guaranteed returns or stock tips (SEBI), cure claims, "lose 10 kg in 15 days", guaranteed astrology outcomes (reworded).
+
+**Break-testing:** I attacked the live app with 58 hostile inputs (prompt injection, a counterfeit-goods seller, script injection in titles, 62 KB inputs, filter evasion such as "g u a r a n t e e d" or "st3roid", fake click floods, store-link hijacking, parallel load). The first run found 9 issues; all are fixed: text is normalised before safety checks (plus Hindi/Hinglish phrases), inputs are size-capped, Tamil/Bengali are no longer mistaken for gibberish, pasted Instagram links work, blank names are rejected, analytics are rate-limited and only count real stores, a double-tap publish returns the same store, and store links are case-insensitive. Known limit: keyword rules can't catch every paraphrase; an LLM moderation pass at publish is next (§9).
 
 **Failure handling:** cheap input checks before any LLM call (empty, gibberish, invalid handle) → 25s timeout per model → fallback model → a friendly "try again" with all inputs kept → the draft is auto-saved in the browser → friendly pages for unknown store links and unexpected errors. The creator never sees a broken page.
 
@@ -107,5 +109,5 @@ I used **Claude Code** as a pair programmer and tutor. I owned the product decis
 2. **Replace assumed price bands with SuperProfile sales data** (median price and conversion by niche × format × follower tier); A/B test the suggested price against ±30%.
 3. **Eval set:** 50 creator profiles across niches and languages, scored for specificity, price sanity and safety; run on every prompt change.
 4. **One-click import into SuperProfile** as real draft products (their MCP server and API).
-5. **Second-provider fallback** (e.g. Gemini), rate limiting, and abuse protection.
-6. Small fixes: refresh the Instagram caption when a product is regenerated; a cover image per product.
+5. **Second-provider fallback** (e.g. Gemini), an **LLM moderation pass at publish** (catches paraphrased claims keyword rules miss), and per-user rate limits on AI calls.
+6. A cover image per offer, and real checkout via SuperProfile.

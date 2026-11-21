@@ -5,7 +5,9 @@
 
 export type InputCheck =
   | { ok: true }
-  | { ok: false; code: "empty" | "gibberish" | "too_short"; message: string };
+  | { ok: false; code: "empty" | "gibberish" | "too_short" | "too_long"; message: string };
+
+export const MAX_DESCRIPTION = 1000;
 
 const COMMON_WORDS = new Set(
   "i am a an the and or my me for to of in on with who help teach coach share make create sell people women men students beginners home fitness yoga finance money tax cooking food recipes design canva exam upsc neet jee astrology tarot fashion style teacher trainer doctor ca engineer developer writer artist music dance photography business marketing career english hindi hai hu main mein ki ka ke ko se aur".split(" ")
@@ -14,22 +16,28 @@ const COMMON_WORDS = new Set(
 export function checkDescription(raw: string | undefined): InputCheck {
   const text = (raw ?? "").trim();
   if (!text) return { ok: false, code: "empty", message: "Tell us a little about yourself first." };
+  if (text.length > MAX_DESCRIPTION) {
+    return { ok: false, code: "too_long", message: `Please keep it under ${MAX_DESCRIPTION.toLocaleString("en-IN")} characters — two or three lines is perfect.` };
+  }
 
-  const words = text.toLowerCase().match(/[\p{L}]+/gu) ?? [];
-  const hasDevanagari = /[ऀ-ॿ]/.test(text);
+  const letters = text.match(/\p{L}/gu) ?? [];
+  const latin = letters.filter((c) => /[a-z]/i.test(c)).length;
+  const words = text.toLowerCase().match(/[\p{L}\p{M}]+/gu) ?? [];
 
-  if (!hasDevanagari) {
-    const realish = words.filter((w) => COMMON_WORDS.has(w) || (w.length >= 3 && /[aeiou]/.test(w) && !/(.)\1\1/.test(w) && !/[bcdfghjklmnpqrstvwxz]{5,}/.test(w)));
-    if (words.length === 0 || realish.length / words.length < 0.5) {
-      return {
-        ok: false,
-        code: "gibberish",
-        message: "We couldn't understand that. Try something like: “I teach home workouts to working women”.",
-      };
+  if (letters.length === 0) {
+    return { ok: false, code: "gibberish", message: "We couldn't understand that. Try something like: “I teach home workouts to working women”." };
+  }
+  // Our gibberish heuristic only understands English-letter text (English / Hinglish).
+  // Hindi, Marathi, Tamil, Bengali etc. are passed to the AI, which judges them.
+  if (latin / letters.length > 0.6) {
+    const latinWords = words.filter((w) => /^[a-z]+$/.test(w));
+    const realish = latinWords.filter((w) => COMMON_WORDS.has(w) || (w.length >= 3 && /[aeiou]/.test(w) && !/(.)\1\1/.test(w) && !/[bcdfghjklmnpqrstvwxz]{5,}/.test(w)));
+    if (latinWords.length === 0 || realish.length / latinWords.length < 0.5) {
+      return { ok: false, code: "gibberish", message: "We couldn't understand that. Try something like: “I teach home workouts to working women”." };
     }
   }
   if (words.length < 3) {
-    // Not an error: we ask follow-up questions instead of guessing. Signalled separately.
+    // Not an error: we ask follow-up questions instead of guessing.
     return { ok: false, code: "too_short", message: "Tell us a bit more so we get it right." };
   }
   return { ok: true };
@@ -41,12 +49,12 @@ export function checkDescription(raw: string | undefined): InputCheck {
 type Rule = { pattern: RegExp; level: "block" | "reword"; label: string };
 
 const RULES: Rule[] = [
-  { pattern: /steroid|anabolic|sarm|testosterone (cycle|injection)|\bcycle plan\b/i, level: "block", label: "steroid / performance drugs" },
+  { pattern: /steroid|स्टेरॉयड|anabolic|\bsarms?\b|testosterone (cycle|injection)|\bcycle plan\b/i, level: "block", label: "steroid / performance drugs" },
   { pattern: /fat[- ]?burner (pill|capsule)|weight[- ]?loss (pill|capsule)|slimming pill/i, level: "block", label: "weight-loss pills" },
-  { pattern: /first[- ]?copy|replica|\bclone\b (bag|watch|shoe)|master ?copy|7a quality/i, level: "block", label: "counterfeit goods" },
+  { pattern: /first[- ]?copy|फर्स्ट कॉपी|replica|\bclone\b (bag|watch|shoe)|master ?copy|7a quality/i, level: "block", label: "counterfeit goods" },
   { pattern: /leak(ed)? (paper|question)|paper leak/i, level: "block", label: "leaked exam papers" },
   { pattern: /betting tips|satta|sure[- ]?shot (tips|win)|fixed match/i, level: "block", label: "betting / gambling tips" },
-  { pattern: /guarantee(d)? (\d+%|returns?|profit|income)|100% returns?|double your money|will double|risk[- ]?free returns?/i, level: "reword", label: "guaranteed financial returns" },
+  { pattern: /guarantee(d)? (\d+ ?%|\d+ ?percent|returns?|profit|income)|\d+ ?(%|percent) (returns?|profit)|returns? assured|assured returns?|double your money|will double|risk[- ]?free returns?|pakka (profit|returns?|munafa)|(paisa|paise|money) double|double (paisa|paise)|गारंटी|गारंटीड|पक्का (मुनाफा|रिटर्न)|पैसा डबल|दोगुना/i, level: "reword", label: "guaranteed financial returns" },
   { pattern: /stock tips?|buy (call|signal)s?|intraday (tips|calls)|multibagger/i, level: "reword", label: "stock tips (needs SEBI registration)" },
   { pattern: /\bcures?\b|heal (your )?(thyroid|diabetes|cancer|pcos|anxiety)|no medicine needed/i, level: "reword", label: "medical cure claims" },
   { pattern: /lose \d+ ?kg in \d+ ?days|guaranteed (weight|results)/i, level: "reword", label: "unrealistic body-result guarantees" },
@@ -55,9 +63,23 @@ const RULES: Rule[] = [
 
 export type PolicyHit = { level: "block" | "reword"; label: string };
 
+/**
+ * Undo common tricks used to dodge keyword filters:
+ * "g u a r a n t e e d" → "guaranteed", "st3roid" → "steroid", zero-width characters, odd spacing.
+ */
+export function normaliseForScan(text: string): string {
+  let t = text.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/g, "").toLowerCase();
+  const LEET: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", $: "s" };
+  t = t.replace(/(?<=[a-z])[013457@$]|[013457@$](?=[a-z])/g, (c) => LEET[c] ?? c);
+  // join letters separated by single spaces/dots/dashes: "g u a r a n t e e d" → "guaranteed"
+  t = t.replace(/\b(?:[a-z][\s.\-_*]){2,}[a-z]\b/g, (m) => m.replace(/[\s.\-_*]/g, ""));
+  return t.replace(/\s+/g, " ");
+}
+
 export function scanText(text: string): PolicyHit[] {
+  const variants = [text, normaliseForScan(text)];
   const hits: PolicyHit[] = [];
-  for (const r of RULES) if (r.pattern.test(text)) hits.push({ level: r.level, label: r.label });
+  for (const r of RULES) if (variants.some((v) => r.pattern.test(v))) hits.push({ level: r.level, label: r.label });
   return hits;
 }
 

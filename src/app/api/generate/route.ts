@@ -30,8 +30,8 @@ export async function POST(req: Request) {
       const bio = await regenerateBio(profile, language, store as StoreOutput);
       return ok({ bio });
     }
-    const { product } = await regenerateProduct(profile, language, store as StoreOutput, target.index);
-    return ok({ product });
+    const { product, shareCaption } = await regenerateProduct(profile, language, store as StoreOutput, target.index);
+    return ok({ product, shareCaption });
   } catch (err) {
     console.error("[api/generate]", err);
     return fail("ai_unavailable", AI_DOWN_MESSAGE, 503);

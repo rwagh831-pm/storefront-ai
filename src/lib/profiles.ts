@@ -11,7 +11,7 @@ export const SAMPLE_HANDLES = data.profiles.map((p) => ({
 }));
 
 export function normaliseHandle(raw: string): string {
-  return raw.trim().replace(/^@+/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").toLowerCase();
+  return raw.trim().split(/[?#]/)[0].replace(/^@+/, "").replace(/^(https?:\/\/)?(www\.|m\.)?instagram\.com\//i, "").replace(/\/.*$/, "").toLowerCase();
 }
 
 export function isValidHandle(h: string): boolean {

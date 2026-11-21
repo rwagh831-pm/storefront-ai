@@ -160,18 +160,19 @@ export async function regenerateProduct(
   current: StoreOutput,
   index: number,
   avoid: string[] = []
-): Promise<{ product: Product; note?: SafetyNote }> {
+): Promise<{ product: Product; shareCaption: string; note?: SafetyNote }> {
   const others = current.products.filter((_, i) => i !== index).map((p) => `${p.title} (${p.format}, ₹${p.price})`);
   const old = current.products[index];
   const user = `${creatorContext(profile)}\n\nLANGUAGE: ${languageRule(language)}\n\nOTHER PRODUCTS IN THE STORE (do not duplicate): ${others.join(" | ") || "none"}
 PRODUCT TO REPLACE: ${old ? `${old.title} (${old.format})` : "none"} — create a clearly different idea that still fits the price ladder.
 ${avoid.length ? `MUST AVOID: ${avoid.join(", ")}.` : ""}
-Return one product.`;
+Return one product, and a refreshed shareCaption (Instagram caption, 2–4 short lines, ending with "Link in bio 👆") that fits the store's offers after this change.`;
   const { data } = await structured(SingleProductOutputSchema, STORE_SYSTEM, user, 3000);
   const product = fixPrice(data.product, profile);
   const hits = scanText(productText(product));
   if (hits.length) throw new AIError(`Product failed safety check: ${hits.map((h) => h.label).join(", ")}`);
-  return { product };
+  const shareCaption = scanText(data.shareCaption).length ? current.shareCaption : data.shareCaption;
+  return { product, shareCaption };
 }
 
 // ---------------------------------------------------------------------------

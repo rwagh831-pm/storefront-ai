@@ -146,7 +146,7 @@ export default function StoreView({
             <div className={`relative flex aspect-[4/3] flex-col justify-end bg-gradient-to-br ${t.cover} p-5`}>
               <span className="absolute right-4 top-3 text-5xl drop-shadow-sm">{FORMAT_EMOJI[p.format]}</span>
               <h2 className="break-words text-2xl font-extrabold leading-tight text-zinc-900">{p.title}</h2>
-              {p.whoItsFor && <p className="mt-1 line-clamp-2 break-words text-sm text-zinc-800/80">{p.whoItsFor}</p>}
+              {p.whoItsFor && <p className="mt-1 break-words text-sm text-zinc-800/80">{p.whoItsFor}</p>}
             </div>
 
             <div className="flex items-center justify-between gap-3 px-4 pt-3">

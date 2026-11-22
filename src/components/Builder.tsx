@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import StoreView, { FORMAT_EMOJI, RingAvatar, THEME_STYLES, formatINR } from "./StoreView";
 import { isRuleFlag } from "@/lib/guardrails";
 import {
@@ -399,13 +399,15 @@ export default function Builder({ samples }: { samples: Sample[] }) {
                     </button>
                   ))}
                 </div>
-                <input
-                  placeholder="Or type your own answer"
-                  maxLength={200}
-                  value={answers[q.id] && !q.options.includes(answers[q.id]) ? answers[q.id] : ""}
-                  onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                  className="mt-2 min-h-11 w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-sm"
-                />
+                <div className="mt-2">
+                  <AutoText
+                    singleLine
+                    placeholder="Or type your own answer"
+                    maxLength={200}
+                    value={answers[q.id] && !q.options.includes(answers[q.id]) ? answers[q.id] : ""}
+                    onChange={(v) => setAnswers({ ...answers, [q.id]: v })}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -496,10 +498,10 @@ export default function Builder({ samples }: { samples: Sample[] }) {
                   <input maxLength={80} value={store.displayName} onChange={(e) => setStore({ ...store, displayName: e.target.value })} className={inputCls} />
                 </Field>
                 <Field label="Tagline">
-                  <input maxLength={160} value={store.tagline} onChange={(e) => setStore({ ...store, tagline: e.target.value })} className={inputCls} />
+                  <AutoText singleLine maxLength={160} value={store.tagline} onChange={(v) => setStore({ ...store, tagline: v })} />
                 </Field>
                 <Field label="Bio">
-                  <textarea rows={4} maxLength={600} value={store.bio} onChange={(e) => setStore({ ...store, bio: e.target.value })} className={inputCls} />
+                  <AutoText minRows={3} maxLength={600} value={store.bio} onChange={(v) => setStore({ ...store, bio: v })} />
                 </Field>
               </Card>
 
@@ -514,7 +516,7 @@ export default function Builder({ samples }: { samples: Sample[] }) {
                   onRemove={store.products.length > 2 ? () => removeProduct(i) : undefined}
                 >
                   <Field label="Title">
-                    <input maxLength={100} value={p.title} onChange={(e) => updateProduct(i, { title: e.target.value })} className={inputCls} />
+                    <AutoText singleLine maxLength={100} value={p.title} onChange={(v) => updateProduct(i, { title: v })} />
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Format">
@@ -541,18 +543,17 @@ export default function Builder({ samples }: { samples: Sample[] }) {
                   </button>
                   {openReason === i && <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900">{p.priceReason}</p>}
                   <Field label="Description">
-                    <textarea rows={4} maxLength={700} value={p.description} onChange={(e) => updateProduct(i, { description: e.target.value })} className={inputCls} />
+                    <AutoText minRows={3} maxLength={700} value={p.description} onChange={(v) => updateProduct(i, { description: v })} />
                   </Field>
                   <Field label="Who it's for">
-                    <input maxLength={200} value={p.whoItsFor} onChange={(e) => updateProduct(i, { whoItsFor: e.target.value })} className={inputCls} />
+                    <AutoText singleLine maxLength={200} value={p.whoItsFor} onChange={(v) => updateProduct(i, { whoItsFor: v })} />
                   </Field>
                   <Field label="What they get (one per line)">
-                    <textarea
-                      rows={3}
+                    <AutoText
+                      minRows={2}
                       value={p.deliverables.join("\n")}
-                      onChange={(e) => updateProduct(i, { deliverables: e.target.value.split("\n").slice(0, 8) })}
-                      onBlur={(e) => updateProduct(i, { deliverables: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 8) })}
-                      className={inputCls}
+                      onChange={(v) => updateProduct(i, { deliverables: v.split("\n").slice(0, 8) })}
+                      onBlur={(v) => updateProduct(i, { deliverables: v.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 8) })}
                     />
                   </Field>
                 </Card>
@@ -614,6 +615,56 @@ export default function Builder({ samples }: { samples: Sample[] }) {
 
 // ---------------------------------------------------------------------------
 const inputCls = "w-full rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2.5 text-base outline-none focus:border-blue-600 focus:bg-white";
+
+/**
+ * A text box that grows to fit its content, so long AI text is always fully visible on a phone
+ * (no sideways scrolling, no inner scrollbar). `singleLine` blocks the Enter key for fields
+ * like titles that must stay one line in the data, while still wrapping visually.
+ */
+function AutoText({
+  value,
+  onChange,
+  onBlur,
+  singleLine = false,
+  minRows = 1,
+  maxLength,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: (v: string) => void;
+  singleLine?: boolean;
+  minRows?: number;
+  maxLength?: number;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={minRows}
+      value={value}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      enterKeyHint={singleLine ? "done" : undefined}
+      onKeyDown={(e) => {
+        if (singleLine && e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).blur();
+        }
+      }}
+      onChange={(e) => onChange(singleLine ? e.target.value.replace(/\s*\n+\s*/g, " ") : e.target.value)}
+      onBlur={(e) => onBlur?.(e.target.value)}
+      className={`${inputCls} resize-none overflow-hidden leading-relaxed`}
+    />
+  );
+}
 
 function sampleTheme(category: string): ThemeName {
   if (/finance|tax|exam/i.test(category)) return "ocean";
@@ -792,10 +843,10 @@ function ConfirmStep({
           <input maxLength={80} value={profile.name} onChange={(e) => onChange({ ...profile, name: e.target.value })} className={inputCls} />
         </Field>
         <Field label="What you're known for">
-          <input maxLength={160} value={profile.niche} onChange={(e) => onChange({ ...profile, niche: e.target.value })} className={inputCls} />
+          <AutoText singleLine maxLength={160} value={profile.niche} onChange={(v) => onChange({ ...profile, niche: v })} />
         </Field>
         <Field label="Who you help">
-          <input maxLength={200} value={profile.audience} onChange={(e) => onChange({ ...profile, audience: e.target.value })} className={inputCls} />
+          <AutoText singleLine maxLength={200} value={profile.audience} onChange={(v) => onChange({ ...profile, audience: v })} />
         </Field>
         <div>
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Followers</span>
@@ -827,12 +878,13 @@ function ConfirmStep({
             ))}
           </div>
         </div>
-        <Field label="Your strengths (comma separated)">
-          <input
-            maxLength={400}
-            value={profile.strengths.join(", ")}
-            onChange={(e) => onChange({ ...profile, strengths: e.target.value.split(",").map((s) => s.trimStart()) })}
-            className={inputCls}
+        <Field label="Your strengths (one per line)">
+          <AutoText
+            minRows={2}
+            maxLength={600}
+            value={profile.strengths.join("\n")}
+            onChange={(v) => onChange({ ...profile, strengths: v.split("\n").slice(0, 6) })}
+            onBlur={(v) => onChange({ ...profile, strengths: v.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 6) })}
           />
         </Field>
         {profile.credentials.length > 0 && (
